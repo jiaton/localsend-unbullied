@@ -38,6 +38,7 @@ import 'package:localsend_app/provider/receive_history_provider.dart';
 import 'package:localsend_app/provider/selection/selected_receiving_files_provider.dart';
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
+import 'package:localsend_app/util/native/channel/android_channel.dart' as android_channel;
 import 'package:localsend_app/util/native/directories.dart';
 import 'package:localsend_app/util/native/file_saver.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
@@ -525,6 +526,22 @@ class ReceiveController {
         androidSdkInt: server.ref.read(deviceInfoProvider).androidSdkInt,
         createdDirectories: receiveState.createdDirectories,
       );
+
+      // Auto-convert HEIC to JPG on Android if enabled
+      if (!savedToGallery &&
+          filePath != null &&
+          checkPlatform([TargetPlatform.android]) &&
+          server.ref.read(settingsProvider).autoConvertHeic) {
+        final ext = filePath.toLowerCase();
+        if (ext.endsWith('.heic') || ext.endsWith('.heif')) {
+          final jpgPath = await android_channel.convertHeicToJpg(filePath);
+          if (jpgPath != null) {
+            _logger.info('Converted HEIC to JPG: $jpgPath');
+            filePath = jpgPath;
+          }
+        }
+      }
+
       if (server.getState().session == null || !allowedStates.contains(server.getState().session!.status)) {
         return await request.respondJson(500, message: 'Server is in invalid state');
       }

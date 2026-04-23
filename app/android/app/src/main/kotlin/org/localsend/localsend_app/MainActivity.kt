@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.Settings
@@ -12,6 +14,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 
 
 private const val CHANNEL = "org.localsend.localsend_app/localsend"
@@ -72,6 +76,8 @@ class MainActivity : FlutterActivity() {
                     result.success(isAnimationsEnabled())
                 }
 
+                "convertHeicToJpg" -> handleConvertHeicToJpg(call, result)
+
                 else -> result.notImplemented()
             }
         }
@@ -80,6 +86,55 @@ class MainActivity : FlutterActivity() {
     private fun isAnimationsEnabled() : Boolean {
         return Settings.Global.getFloat(this.getContentResolver(),
             Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f) != 0.0f;
+    }
+
+    private fun handleConvertHeicToJpg(call: MethodCall, result: MethodChannel.Result) {
+        val heicPath = call.argument<String>("path")
+        if (heicPath == null) {
+            result.error("INVALID_ARG", "Missing 'path' argument", null)
+            return
+        }
+
+        Thread {
+            try {
+                val heicFile = File(heicPath)
+                if (!heicFile.exists()) {
+                    runOnUiThread { result.error("NOT_FOUND", "File not found: $heicPath", null) }
+                    return@Thread
+                }
+
+                val bitmap = BitmapFactory.decodeFile(heicPath)
+                if (bitmap == null) {
+                    runOnUiThread { result.error("DECODE_FAILED", "Failed to decode HEIC", null) }
+                    return@Thread
+                }
+
+                val jpgPath = heicPath.replaceAfterLast('.', "jpg")
+                val tmpFile = File("$jpgPath.tmp")
+
+                try {
+                    FileOutputStream(tmpFile).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                    }
+                    bitmap.recycle()
+
+                    if (!tmpFile.renameTo(File(jpgPath))) {
+                        tmpFile.delete()
+                        runOnUiThread { result.error("RENAME_FAILED", "Failed to rename temp file", null) }
+                        return@Thread
+                    }
+
+                    heicFile.delete()
+                    runOnUiThread { result.success(jpgPath) }
+                } catch (e: Exception) {
+                    bitmap.recycle()
+                    tmpFile.delete()
+                    runOnUiThread { result.error("WRITE_FAILED", e.message, null) }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("CONVERT_FAILED", e.message, null) }
+            }
+        }.start()
     }
 
     private fun openDirectoryPicker(onlyPath: Boolean) {

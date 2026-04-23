@@ -90,6 +90,7 @@ const _deviceType = 'ls_device_type';
 const _deviceModel = 'ls_device_model';
 const _shareViaLinkAutoAccept = 'ls_share_via_link_auto_accept';
 const _advancedSettingsKey = 'ls_advanced_settings';
+const _autoConvertHeic = 'ls_auto_convert_heic';
 
 final persistenceProvider = Provider<PersistenceService>((ref) {
   throw Exception('persistenceProvider not initialized');
@@ -544,6 +545,14 @@ class PersistenceService {
 
   Future<void> setDeviceModel(String deviceModel) async {
     await _prefs.setString(_deviceModel, deviceModel);
+  }
+
+  bool isAutoConvertHeic() {
+    return _prefs.getBool(_autoConvertHeic) ?? false;
+  }
+
+  Future<void> setAutoConvertHeic(bool autoConvertHeic) async {
+    await _prefs.setBool(_autoConvertHeic, autoConvertHeic);
   }
 
   Future<void> clear() async {

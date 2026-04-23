@@ -70,6 +70,7 @@ class SettingsService extends PureNotifier<SettingsState> {
     shareViaLinkAutoAccept: _persistence.getShareViaLinkAutoAccept(),
     discoveryTimeout: _persistence.getDiscoveryTimeout(),
     advancedSettings: _persistence.getAdvancedSettingsEnabled(),
+    autoConvertHeic: _persistence.isAutoConvertHeic(),
   );
 
   Future<void> setAlias(String alias) async {
@@ -245,6 +246,13 @@ class SettingsService extends PureNotifier<SettingsState> {
 
     state = state.copyWith(
       shareViaLinkAutoAccept: shareViaLinkAutoAccept,
+    );
+  }
+
+  Future<void> setAutoConvertHeic(bool autoConvertHeic) async {
+    await _persistence.setAutoConvertHeic(autoConvertHeic);
+    state = state.copyWith(
+      autoConvertHeic: autoConvertHeic,
     );
   }
 }

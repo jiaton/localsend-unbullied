@@ -236,6 +236,14 @@ class SettingsTab extends StatelessWidget {
                             await ref.notifier(settingsProvider).setSaveToGallery(b);
                           },
                         ),
+                      if (checkPlatform([TargetPlatform.android]))
+                        _BooleanEntry(
+                          label: t.settingsTab.receive.autoConvertHeic,
+                          value: vm.settings.autoConvertHeic,
+                          onChanged: (b) async {
+                            await ref.notifier(settingsProvider).setAutoConvertHeic(b);
+                          },
+                        ),
                       _BooleanEntry(
                         label: t.settingsTab.receive.autoFinish,
                         value: vm.settings.autoFinish,
