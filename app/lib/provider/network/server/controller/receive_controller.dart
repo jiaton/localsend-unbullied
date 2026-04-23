@@ -504,6 +504,11 @@ class ReceiveController {
     try {
       _logger.info('Saving ${receivingFile.file.fileName}');
 
+      final bool shouldConvertHeic = checkPlatform([TargetPlatform.android]) &&
+          server.ref.read(settingsProvider).autoConvertHeic &&
+          (receivingFile.desiredName!.toLowerCase().endsWith('.heic') ||
+              receivingFile.desiredName!.toLowerCase().endsWith('.heif'));
+
       (savedToGallery, filePath) = await saveFile(
         destinationDirectory: receiveState.destinationDirectory,
         fileName: receivingFile.desiredName!,
@@ -525,20 +530,24 @@ class ReceiveController {
         lastAccessed: receivingFile.file.metadata?.lastAccessed,
         androidSdkInt: server.ref.read(deviceInfoProvider).androidSdkInt,
         createdDirectories: receiveState.createdDirectories,
+        transformBeforeGallery: shouldConvertHeic
+            ? (cachePath) async {
+                final jpgPath = await android_channel.convertHeicToJpg(cachePath, cacheDir: receiveState.cacheDirectory);
+                if (jpgPath != null) {
+                  _logger.info('Converted HEIC to JPG before gallery save: $jpgPath');
+                  return jpgPath;
+                }
+                return cachePath;
+              }
+            : null,
       );
 
-      // Auto-convert HEIC to JPG on Android if enabled
-      if (!savedToGallery &&
-          filePath != null &&
-          checkPlatform([TargetPlatform.android]) &&
-          server.ref.read(settingsProvider).autoConvertHeic) {
-        final ext = filePath.toLowerCase();
-        if (ext.endsWith('.heic') || ext.endsWith('.heif')) {
-          final jpgPath = await android_channel.convertHeicToJpg(filePath);
-          if (jpgPath != null) {
-            _logger.info('Converted HEIC to JPG: $jpgPath');
-            filePath = jpgPath;
-          }
+      // Auto-convert HEIC to JPG for non-gallery saves
+      if (!savedToGallery && filePath != null && shouldConvertHeic) {
+        final jpgPath = await android_channel.convertHeicToJpg(filePath, cacheDir: receiveState.cacheDirectory);
+        if (jpgPath != null) {
+          _logger.info('Converted HEIC to JPG: $jpgPath');
+          filePath = jpgPath;
         }
       }
 

@@ -42,6 +42,7 @@ Future<(bool, String?)> saveFile({
   int? androidSdkInt,
   DateTime? lastModified,
   DateTime? lastAccessed,
+  Future<String> Function(String path)? transformBeforeGallery,
 }) async {
   final parentDirectory = saveToGallery ? await getCacheDirectory() : destinationDirectory;
 
@@ -94,6 +95,7 @@ Future<(bool, String?)> saveFile({
         close: () async {
           await _saf.endWriteStream(sessionID);
         },
+        transformBeforeGallery: transformBeforeGallery,
       );
     }
   }
@@ -125,6 +127,7 @@ Future<(bool, String?)> saveFile({
         } catch (_) {}
       }
     },
+    transformBeforeGallery: transformBeforeGallery,
   );
 }
 
@@ -141,6 +144,7 @@ Future<(bool, String?)> _saveFile({
   required Future<void> Function(Uint8List data)? writeAsync,
   required Future<void> Function()? flush,
   required Future<void> Function() close,
+  Future<String> Function(String path)? transformBeforeGallery,
 }) async {
   try {
     int savedBytes = 0;
@@ -171,6 +175,9 @@ Future<(bool, String?)> _saveFile({
 
     if (saveToGallery) {
       try {
+        if (transformBeforeGallery != null) {
+          destinationPath = await transformBeforeGallery(destinationPath);
+        }
         isImage ? await Gal.putImage(destinationPath) : await Gal.putVideo(destinationPath);
         await File(destinationPath).delete();
         onProgress(savedBytes);

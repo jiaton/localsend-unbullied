@@ -95,10 +95,12 @@ Future<void> openGallery() async {
 /// Converts a HEIC file to JPG using Android's native ImageDecoder.
 /// Returns the new JPG file path on success, null on failure.
 /// The original HEIC file is deleted only after successful conversion.
-Future<String?> convertHeicToJpg(String heicPath) async {
+/// [cacheDir] is used as working directory when [heicPath] is a content:// URI.
+Future<String?> convertHeicToJpg(String heicPath, {required String cacheDir}) async {
   try {
     final result = await _methodChannel.invokeMethod<String>('convertHeicToJpg', {
       'path': heicPath,
+      'cacheDir': cacheDir,
     });
     return result;
   } catch (e) {

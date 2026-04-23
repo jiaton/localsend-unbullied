@@ -7,6 +7,8 @@ import android.content.Intent
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.Settings
@@ -89,52 +91,153 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleConvertHeicToJpg(call: MethodCall, result: MethodChannel.Result) {
-        val heicPath = call.argument<String>("path")
-        if (heicPath == null) {
-            result.error("INVALID_ARG", "Missing 'path' argument", null)
+        val path = call.argument<String>("path")
+        val cacheDir = call.argument<String>("cacheDir")
+        if (path == null || cacheDir == null) {
+            result.error("INVALID_ARG", "Missing 'path' or 'cacheDir' argument", null)
             return
         }
 
+        val isContentUri = path.startsWith("content://")
+
         Thread {
             try {
-                val heicFile = File(heicPath)
-                if (!heicFile.exists()) {
-                    runOnUiThread { result.error("NOT_FOUND", "File not found: $heicPath", null) }
-                    return@Thread
+                // Step 1: Decode bitmap and read EXIF
+                val bitmap: Bitmap?
+                val exifSource: ExifInterface?
+
+                if (isContentUri) {
+                    val uri = Uri.parse(path)
+                    val inputStream = contentResolver.openInputStream(uri)
+                    if (inputStream == null) {
+                        runOnUiThread { result.error("NOT_FOUND", "Cannot open: $path", null) }
+                        return@Thread
+                    }
+                    bitmap = BitmapFactory.decodeStream(inputStream)
+                    inputStream.close()
+
+                    // Re-open for EXIF
+                    val exifStream = contentResolver.openInputStream(uri)
+                    exifSource = if (exifStream != null) {
+                        try { ExifInterface(exifStream) } catch (_: Exception) { null }
+                            .also { exifStream.close() }
+                    } else null
+                } else {
+                    val heicFile = File(path)
+                    if (!heicFile.exists()) {
+                        runOnUiThread { result.error("NOT_FOUND", "File not found: $path", null) }
+                        return@Thread
+                    }
+                    bitmap = BitmapFactory.decodeFile(path)
+                    exifSource = try { ExifInterface(path) } catch (_: Exception) { null }
                 }
 
-                val bitmap = BitmapFactory.decodeFile(heicPath)
                 if (bitmap == null) {
                     runOnUiThread { result.error("DECODE_FAILED", "Failed to decode HEIC", null) }
                     return@Thread
                 }
 
-                val jpgPath = heicPath.replaceAfterLast('.', "jpg")
-                val tmpFile = File("$jpgPath.tmp")
+                // Step 2: Apply EXIF rotation
+                val orientation = exifSource?.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                ) ?: ExifInterface.ORIENTATION_NORMAL
+
+                var finalBitmap = bitmap
+                val matrix = Matrix()
+                when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                    ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                    ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                    ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+                    ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+                    ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.preScale(-1f, 1f) }
+                    ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.preScale(-1f, 1f) }
+                }
+                if (!matrix.isIdentity) {
+                    finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    bitmap.recycle()
+                }
+
+                // Step 3: Write JPG to cache, copy EXIF, then move to final location
+                val baseName = path.substringAfterLast('/').substringBeforeLast('.').let {
+                    java.net.URLDecoder.decode(it, "UTF-8").substringAfterLast('/')
+                }
+                val tmpFile = File(cacheDir, "$baseName.jpg.tmp")
+                val jpgCacheFile = File(cacheDir, "$baseName.jpg")
 
                 try {
                     FileOutputStream(tmpFile).use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
                     }
-                    bitmap.recycle()
+                    finalBitmap.recycle()
 
-                    if (!tmpFile.renameTo(File(jpgPath))) {
+                    // Copy EXIF metadata
+                    if (exifSource != null) {
+                        val exifDest = ExifInterface(tmpFile.absolutePath)
+                        copyExifAttributes(exifSource, exifDest)
+                        exifDest.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+                        exifDest.saveAttributes()
+                    }
+
+                    if (!tmpFile.renameTo(jpgCacheFile)) {
                         tmpFile.delete()
                         runOnUiThread { result.error("RENAME_FAILED", "Failed to rename temp file", null) }
                         return@Thread
                     }
 
-                    heicFile.delete()
-                    runOnUiThread { result.success(jpgPath) }
+                    // Delete original
+                    if (isContentUri) {
+                        try { DocumentsContract.deleteDocument(contentResolver, Uri.parse(path)) } catch (_: Exception) {}
+                    } else {
+                        File(path).delete()
+                    }
+
+                    if (isContentUri) {
+                        // For SAF destinations, return the cache path — caller can access it directly
+                        runOnUiThread { result.success(jpgCacheFile.absolutePath) }
+                    } else {
+                        // For filesystem paths, move to same directory as original
+                        val finalFile = File(path.substringBeforeLast('.') + ".jpg")
+                        if (jpgCacheFile.renameTo(finalFile)) {
+                            runOnUiThread { result.success(finalFile.absolutePath) }
+                        } else {
+                            // rename across filesystems — copy and delete
+                            jpgCacheFile.copyTo(finalFile, overwrite = true)
+                            jpgCacheFile.delete()
+                            runOnUiThread { result.success(finalFile.absolutePath) }
+                        }
+                    }
                 } catch (e: Exception) {
-                    bitmap.recycle()
+                    finalBitmap.recycle()
                     tmpFile.delete()
+                    jpgCacheFile.delete()
                     runOnUiThread { result.error("WRITE_FAILED", e.message, null) }
                 }
             } catch (e: Exception) {
                 runOnUiThread { result.error("CONVERT_FAILED", e.message, null) }
             }
         }.start()
+    }
+
+    private fun copyExifAttributes(source: ExifInterface, dest: ExifInterface) {
+        val tags = arrayOf(
+            ExifInterface.TAG_DATETIME, ExifInterface.TAG_DATETIME_DIGITIZED, ExifInterface.TAG_DATETIME_ORIGINAL,
+            ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
+            ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,
+            ExifInterface.TAG_GPS_ALTITUDE, ExifInterface.TAG_GPS_ALTITUDE_REF,
+            ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL,
+            ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_F_NUMBER,
+            ExifInterface.TAG_ISO_SPEED_RATINGS, ExifInterface.TAG_EXPOSURE_TIME,
+            ExifInterface.TAG_WHITE_BALANCE, ExifInterface.TAG_FLASH,
+            ExifInterface.TAG_IMAGE_WIDTH, ExifInterface.TAG_IMAGE_LENGTH,
+            ExifInterface.TAG_SOFTWARE, ExifInterface.TAG_ARTIST, ExifInterface.TAG_COPYRIGHT,
+        )
+        for (tag in tags) {
+            val value = source.getAttribute(tag)
+            if (value != null) {
+                dest.setAttribute(tag, value)
+            }
+        }
     }
 
     private fun openDirectoryPicker(onlyPath: Boolean) {
