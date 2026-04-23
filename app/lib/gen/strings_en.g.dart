@@ -72,6 +72,7 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
   late final TranslationsTrayEn tray = TranslationsTrayEn.internal(_root);
   late final TranslationsWebEn web = TranslationsWebEn.internal(_root);
   late final TranslationsAssetPickerEn assetPicker = TranslationsAssetPickerEn.internal(_root);
+  late final TranslationsTravelModeEn travelMode = TranslationsTravelModeEn.internal(_root);
 }
 
 // Path: general
@@ -1767,4 +1768,28 @@ class TranslationsProgressPageTotalTitleEn {
 
   /// en: 'Canceled by receiver'
   String get canceledReceiver => 'Canceled by receiver';
+}
+
+// Path: travelMode
+class TranslationsTravelModeEn {
+  TranslationsTravelModeEn.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Travel Mode'
+  String get title => 'Travel Mode';
+
+  /// en: 'Scan with iPhone Camera to join'
+  String get scanQr => 'Scan with iPhone Camera to join';
+
+  /// en: 'Password'
+  String get password => 'Password';
+
+  /// en: 'Stop Hotspot'
+  String get stop => 'Stop Hotspot';
+
+  /// en: 'Could not start hotspot'
+  String get error => 'Could not start hotspot';
 }

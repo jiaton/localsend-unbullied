@@ -11,6 +11,7 @@ import 'package:localsend_app/util/native/platform_check.dart';
 import 'package:localsend_app/widget/animations/initial_fade_transition.dart';
 import 'package:localsend_app/widget/column_list_view.dart';
 import 'package:localsend_app/widget/custom_icon_button.dart';
+import 'package:localsend_app/widget/dialogs/hotspot_dialog.dart';
 import 'package:localsend_app/widget/local_send_logo.dart';
 import 'package:localsend_app/widget/responsive_list_view.dart';
 import 'package:localsend_app/widget/rotating_widget.dart';
@@ -168,6 +169,15 @@ class _CornerButtons extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            if (checkPlatform([TargetPlatform.android]) && !showAdvanced)
+              AnimatedOpacity(
+                opacity: showHistoryButton ? 1 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: CustomIconButton(
+                  onPressed: () => HotspotDialog.open(context),
+                  child: const Icon(Icons.wifi_tethering),
+                ),
+              ),
             if (!showAdvanced)
               AnimatedOpacity(
                 opacity: showHistoryButton ? 1 : 0,

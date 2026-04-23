@@ -10,6 +10,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
@@ -27,6 +29,7 @@ private const val REQUEST_CODE_PICK_FILE = 3
 
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
+    private var hotspotReservation: WifiManager.LocalOnlyHotspotReservation? = null
 
     // Overriding the static methods we need from the Java class, as described
     // in the documentation of `FlutterActivity.NewEngineIntentBuilder`
@@ -80,6 +83,9 @@ class MainActivity : FlutterActivity() {
 
                 "convertHeicToJpg" -> handleConvertHeicToJpg(call, result)
 
+                "startHotspot" -> handleStartHotspot(result)
+                "stopHotspot" -> handleStopHotspot(result)
+
                 else -> result.notImplemented()
             }
         }
@@ -88,6 +94,65 @@ class MainActivity : FlutterActivity() {
     private fun isAnimationsEnabled() : Boolean {
         return Settings.Global.getFloat(this.getContentResolver(),
             Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f) != 0.0f;
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun handleStartHotspot(result: MethodChannel.Result) {
+        if (hotspotReservation != null) {
+            result.error("ALREADY_ACTIVE", "Hotspot is already running", null)
+            return
+        }
+
+        val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+        try {
+            wifiManager.startLocalOnlyHotspot(object : WifiManager.LocalOnlyHotspotCallback() {
+                override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
+                    hotspotReservation = reservation
+                    val config = reservation.wifiConfiguration
+                    // WifiConfiguration is deprecated but LocalOnlyHotspot still uses it
+                    @Suppress("DEPRECATION")
+                    val ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        reservation.softApConfiguration?.ssid ?: config?.SSID ?: ""
+                    } else {
+                        config?.SSID ?: ""
+                    }
+                    @Suppress("DEPRECATION")
+                    val password = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        reservation.softApConfiguration?.passphrase ?: config?.preSharedKey ?: ""
+                    } else {
+                        config?.preSharedKey ?: ""
+                    }
+                    runOnUiThread {
+                        result.success(mapOf("ssid" to ssid, "password" to password))
+                    }
+                }
+
+                override fun onStopped() {
+                    hotspotReservation = null
+                }
+
+                override fun onFailed(reason: Int) {
+                    hotspotReservation = null
+                    runOnUiThread {
+                        result.error("HOTSPOT_FAILED", "Failed to start hotspot, reason: $reason", null)
+                    }
+                }
+            }, null)
+        } catch (e: Exception) {
+            result.error("HOTSPOT_ERROR", e.message, null)
+        }
+    }
+
+    private fun handleStopHotspot(result: MethodChannel.Result) {
+        hotspotReservation?.close()
+        hotspotReservation = null
+        result.success(null)
+    }
+
+    override fun onDestroy() {
+        hotspotReservation?.close()
+        hotspotReservation = null
+        super.onDestroy()
     }
 
     private fun handleConvertHeicToJpg(call: MethodCall, result: MethodChannel.Result) {

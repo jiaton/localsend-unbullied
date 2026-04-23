@@ -532,5 +532,12 @@
     "sActionUseCameraHint": "use camera",
     "sNameDurationLabel": "duration",
     "sUnitAssetCountLabel": "count"
+  },
+  "travelMode": {
+    "title": "Travel Mode",
+    "scanQr": "Scan with iPhone Camera to join",
+    "password": "Password",
+    "stop": "Stop Hotspot",
+    "error": "Could not start hotspot"
   }
 }

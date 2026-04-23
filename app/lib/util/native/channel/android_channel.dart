@@ -92,6 +92,28 @@ Future<void> openGallery() async {
   await _methodChannel.invokeMethod('openGallery');
 }
 
+/// Starts a LocalOnlyHotspot on Android.
+/// Returns {ssid, password} on success, null on failure.
+Future<({String ssid, String password})?> startHotspot() async {
+  try {
+    final result = await _methodChannel.invokeMethod<Map>('startHotspot');
+    if (result == null) return null;
+    return (ssid: result['ssid'] as String, password: result['password'] as String);
+  } catch (e) {
+    _logger.warning('Failed to start hotspot', e);
+    return null;
+  }
+}
+
+/// Stops the LocalOnlyHotspot.
+Future<void> stopHotspot() async {
+  try {
+    await _methodChannel.invokeMethod('stopHotspot');
+  } catch (e) {
+    _logger.warning('Failed to stop hotspot', e);
+  }
+}
+
 /// Converts a HEIC file to JPG using Android's native ImageDecoder.
 /// Returns the new JPG file path on success, null on failure.
 /// The original HEIC file is deleted only after successful conversion.
