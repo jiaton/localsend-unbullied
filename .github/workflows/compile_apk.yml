@@ -2,6 +2,9 @@ name: Compile APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/auto-heic-to-jpg
 
 env:
   FLUTTER_VERSION: "3.35.6"
