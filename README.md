@@ -1,11 +1,32 @@
-# LocalSend
+# LocalSend Enhanced
 
-[![CI status][ci-badge]][ci-workflow]
-[![Translations][translate-badge]][translate-link]
-[![Packaging status][packaging-badge]][packaging-link]
+> A fork of [LocalSend](https://github.com/localsend/localsend) with additional features for cross-platform compatibility.
 
-[ci-badge]: https://github.com/localsend/localsend/actions/workflows/ci.yml/badge.svg
-[ci-workflow]: https://github.com/localsend/localsend/actions/workflows/ci.yml
+## Fork Enhancements
+
+### Auto HEIC-to-JPG Conversion (Android)
+Automatically converts received HEIC/HEIF images to JPG on Android devices. Solves the common pain point where photos sent from iPhones are unreadable on many Android apps.
+- Optional toggle in Settings → Receive (off by default)
+- Preserves EXIF metadata (GPS, camera info, dates)
+- Correct rotation handling
+- Works with both gallery save and custom folder destinations (including SAF/content:// URIs)
+- Atomic: original file preserved if conversion fails
+
+### Travel Transfer Mode (Android)
+Creates a local Wi-Fi hotspot for file transfers when no shared network is available — perfect for travel, outdoors, or air-gapped environments.
+- One-tap hotspot via the wifi icon on the Receive tab
+- Generates a QR code scannable by iPhone Camera to auto-join
+- LocalSend discovery works immediately over the hotspot
+- Hotspot persists independently of the QR dialog
+
+---
+
+*All upstream LocalSend features are preserved. See the [original README](https://github.com/localsend/localsend) for full documentation.*
+
+---
+
+[ci-badge]: https://github.com/jiaton/localsend/actions/workflows/ci.yml/badge.svg
+[ci-workflow]: https://github.com/jiaton/localsend/actions/workflows/ci.yml
 [translate-badge]: https://hosted.weblate.org/widget/localsend/app/svg-badge.svg
 [translate-link]: https://hosted.weblate.org/engage/localsend/
 [packaging-badge]: https://repology.org/badge/tiny-repos/localsend.svg
